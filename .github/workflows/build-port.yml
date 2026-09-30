@@ -51,21 +51,19 @@ jobs:
           echo "Processing MP4 files to prevent web build crashes..."
           find . -name "*.mp4" -type f -exec mv {} {}.disabled \;
 
-      - name: Setup Haxe
+            - name: Setup Haxe
         uses: krdlab/setup-haxe@master
         with:
-          haxe-version: 4.2.5
+          haxe-version: 4.3.7
 
       - name: Install Haxelibs and Dependencies
         run: |
           cd engine-source
+          mkdir -p ~/haxelib
           haxelib setup ~/haxelib
-          haxelib install hmm --quiet
-          haxelib run hmm install --quiet
-          haxelib install lime
-          haxelib install openfl
-          haxelib install flixel
-
+          chmod +x setup/unix.sh
+          bash setup/unix.sh
+    
       - name: Patch HTML5 incompatible code (Mock Sys)
         run: |
           cd engine-source
