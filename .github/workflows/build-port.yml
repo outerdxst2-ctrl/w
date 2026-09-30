@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mod_url:
-        description: 'Direct URL to your mod .zip file (Google Drive, Dropbox, MediaFire, Discord, etc.)'
+        description: "Direct URL to your mod .zip file"
         required: true
         type: string
 
