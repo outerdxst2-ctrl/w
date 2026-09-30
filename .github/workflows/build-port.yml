@@ -70,113 +70,178 @@ jobs:
         run: |
           cd engine-source
 
-          # Disable native-only Discord and multithreaded loading on HTML5
-          sed -i 's#<define name="DISCORD_ALLOWED" />#<define name="DISCORD_ALLOWED" unless="html5" />#' Project.xml
-          sed -i 's#<define name="MULTITHREADED_LOADING" />#<define name="MULTITHREADED_LOADING" unless="html5" />#' Project.xml
+          # Disable native-only systems on HTML5
+          sed -i 's#<define name="DISCORD_ALLOWED" />#<define name="DISCORD_ALLOWED" unless="html5" />#' Project.xml || true
+          sed -i 's#<define name="MULTITHREADED_LOADING" />#<define name="MULTITHREADED_LOADING" unless="html5" />#' Project.xml || true
 
-          cat > source/FileSystem.hx <<'EOF'
-          class FileSystem {
-            public static function absolutePath(path:String) return path;
-            public static function exists(path:String) return false;
-            public static function readDirectory(path:String):Array<String> return [];
-            public static function isDirectory(path:String) return false;
-            public static function stat(path:String) return null;
-            public static function fullPath(path:String) return path;
-            public static function createDirectory(path:String) {}
-            public static function deleteFile(path:String) {}
-            public static function deleteDirectory(path:String) {}
+          mkdir -p source/webcompat
+
+          cat > source/webcompat/WebFileSystem.hx <<'EOF'
+          package webcompat;
+
+          class WebFileSystem {
+            public static function absolutePath(path:String):String {
+              return path;
+            }
+
+            public static function exists(path:String):Bool {
+              return false;
+            }
+
+            public static function readDirectory(path:String):Array<String> {
+              return [];
+            }
+
+            public static function isDirectory(path:String):Bool {
+              return false;
+            }
+
+            public static function stat(path:String):Dynamic {
+              return null;
+            }
+
+            public static function fullPath(path:String):String {
+              return path;
+            }
+
+            public static function createDirectory(path:String):Void {}
+
+            public static function deleteFile(path:String):Void {}
+
+            public static function deleteDirectory(path:String):Void {}
           }
           EOF
 
-          cat > source/File.hx <<'EOF'
-          class File {
-            public static function getContent(path:String) return "";
-            public static function getBytes(path:String) return null;
-            public static function saveContent(path:String, c:String) {}
-            public static function saveBytes(path:String, b:Dynamic) {}
-            public static function copy(s:String, d:String) {}
+          cat > source/webcompat/WebFile.hx <<'EOF'
+          package webcompat;
+
+          class WebFile {
+            public static function getContent(path:String):String {
+              return "";
+            }
+
+            public static function getBytes(path:String):haxe.io.Bytes {
+              return null;
+            }
+
+            public static function saveContent(path:String, content:String):Void {}
+
+            public static function saveBytes(path:String, bytes:haxe.io.Bytes):Void {}
+
+            public static function copy(source:String, destination:String):Void {}
           }
           EOF
 
-          cat > source/Sys.hx <<'EOF'
-          class Sys {
-            public static function exit(code:Int) {}
-            public static function sleep(t:Float) {}
-            public static function command(c:String, ?a:Array<String>) return 0;
-            public static function args():Array<String> return [];
-            public static function getCwd() return "";
-            public static function setCwd(s:String) {}
-            public static function print(v:Dynamic) {}
-            public static function println(v:Dynamic) {}
-            public static function environment() return new haxe.ds.StringMap<String>();
-            public static function getEnv(s:String) return "";
-            public static function programPath() return "";
-          }
-          EOF
+          cat > source/webcompat/WebProcess.hx <<'EOF'
+          package webcompat;
 
-          cat > source/Process.hx <<'EOF'
-          class Process {
+          class WebProcess {
             public var stdout:Dynamic;
             public var stderr:Dynamic;
 
-            public function new(c:String, ?a:Dynamic) {
+            public function new(command:String, ?args:Dynamic) {
               stdout = {
-                readAll: function() return {
-                  toString: function() return ""
+                readAll: function() {
+                  return {
+                    toString: function() return ""
+                  };
                 },
                 readLine: function() return ""
               };
+
               stderr = stdout;
             }
 
-            public function exitCode(b:Bool = true) return 0;
-            public function close() {}
-          }
-          EOF
-
-          cat > source/Thread.hx <<'EOF'
-          class Thread {
-            public static function create(f:Void->Void) {
-              f();
+            public function exitCode(block:Bool = true):Int {
+              return 0;
             }
 
-            public static function readMessage(b:Bool) return null;
-            public static function sendMessage(m:Dynamic) {}
+            public function close():Void {}
           }
           EOF
 
-          cat > source/Mutex.hx <<'EOF'
-          class Mutex {
+          cat > source/webcompat/WebThread.hx <<'EOF'
+          package webcompat;
+
+          class WebThread {
+            public static function create(func:Void->Void):WebThread {
+              func();
+              return new WebThread();
+            }
+
             public function new() {}
-            public function acquire() {}
-            public function release() {}
+
+            public static function readMessage(block:Bool):Dynamic {
+              return null;
+            }
+
+            public function sendMessage(message:Dynamic):Void {}
           }
           EOF
 
-          cat > source/FixedThreadPool.hx <<'EOF'
-          class FixedThreadPool {
+          cat > source/webcompat/WebMutex.hx <<'EOF'
+          package webcompat;
+
+          class WebMutex {
+            public function new() {}
+
+            public function acquire():Void {}
+
+            public function release():Void {}
+          }
+          EOF
+
+          cat > source/webcompat/WebFixedThreadPool.hx <<'EOF'
+          package webcompat;
+
+          class WebFixedThreadPool {
             public function new(count:Int) {}
 
-            public function run(f:Void->Void) {
-              f();
+            public function run(func:Void->Void):Void {
+              func();
             }
 
-            public function shutdown() {}
+            public function shutdown():Void {}
           }
           EOF
 
+          # Replace desktop imports with HTML5-safe aliases.
           find source -name "*.hx" -type f -exec sed -i \
-            -e 's/sys\.FileSystem/FileSystem/g' \
-            -e 's/sys\.io\.File/File/g' \
-            -e 's/sys\.io\.Process/Process/g' \
-            -e 's/sys\.thread\.Thread/Thread/g' \
-            -e 's/sys\.thread\.Mutex/Mutex/g' \
-            -e 's/sys\.thread\.FixedThreadPool/FixedThreadPool/g' \
-            -e '/import cpp/d' \
-            -e 's/cpp\.[a-zA-Z0-9_]\+/Dynamic/g' \
-            -e '/import llua/d' \
-            -e 's/llua\.[a-zA-Z0-9_]\+/Dynamic/g' \
+            -e 's#import sys\.FileSystem;#import webcompat.WebFileSystem as FileSystem;#g' \
+            -e 's#import sys\.io\.File;#import webcompat.WebFile as File;#g' \
+            -e 's#import sys\.io\.Process;#import webcompat.WebProcess as Process;#g' \
+            -e 's#import sys\.thread\.Thread;#import webcompat.WebThread as Thread;#g' \
+            -e 's#import sys\.thread\.Mutex;#import webcompat.WebMutex as Mutex;#g' \
+            -e 's#import sys\.thread\.FixedThreadPool;#import webcompat.WebFixedThreadPool as FixedThreadPool;#g' \
             {} +
+
+          # Replace fully-qualified references too.
+          find source -name "*.hx" -type f -exec sed -i \
+            -e 's#sys\.FileSystem#webcompat.WebFileSystem#g' \
+            -e 's#sys\.io\.File#webcompat.WebFile#g' \
+            -e 's#sys\.io\.Process#webcompat.WebProcess#g' \
+            -e 's#sys\.thread\.Thread#webcompat.WebThread#g' \
+            -e 's#sys\.thread\.Mutex#webcompat.WebMutex#g' \
+            -e 's#sys\.thread\.FixedThreadPool#webcompat.WebFixedThreadPool#g' \
+            {} +
+
+          # Browser target has no FlxG.error()
+          find source -name "*.hx" -type f -exec sed -i \
+            's/FlxG\.error(/FlxG.log.error(/g' \
+            {} +
+
+          # Disable C++ memory reporting in browser.
+          sed -i \
+            's/return Dynamic\.Gc\.memInfo64(Dynamic\.Gc\.MEM_INFO_USAGE);/return 0;/g' \
+            source/debug/FPSCounter.hx || true
+
+          # Remove direct cpp imports from HTML5 compilation.
+          find source -name "*.hx" -type f -exec sed -i \
+            -e '/^import cpp\./d' \
+            -e '/^import llua\./d' \
+            {} +
+
+          echo "HTML5 compatibility patches applied."
 
       - name: Build HTML5
         run: |
@@ -187,7 +252,7 @@ jobs:
         run: |
           cd engine-source/export/release/html5/bin
 
-          MAIN_JS=$(ls *.js | grep -E -v 'howler|pako' | head -n 1)
+          MAIN_JS=$(ls *.js | grep -E -v 'howler|pako' | head -n 1 || true)
 
           if [ -n "$MAIN_JS" ] && [ "$MAIN_JS" != "funkin.js" ]; then
             mv "$MAIN_JS" funkin.js
